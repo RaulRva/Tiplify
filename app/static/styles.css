@@ -56,6 +56,7 @@ a { color: inherit; text-decoration: none; }
   justify-content: space-between;
   gap: 1rem;
   padding: 0.75rem 0;
+  flex-wrap: wrap;
 }
 
 .brand { display: flex; align-items: center; gap: 0.7rem; }
@@ -89,6 +90,28 @@ a { color: inherit; text-decoration: none; }
 .nav a:hover { background: var(--panel-2); color: var(--text); }
 .nav a.active { background: var(--panel-2); color: var(--text); }
 .nav a.muted-link { color: var(--text-faint); }
+
+.league-switch {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.18rem;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.league-switch a {
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  color: var(--text-dim);
+  font-weight: 700;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+}
+
+.league-switch a:hover { color: var(--text); }
+.league-switch a.active { background: var(--accent); color: #fff; }
 
 .btn-refresh {
   background: linear-gradient(140deg, var(--accent), #5a7cff) !important;

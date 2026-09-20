@@ -45,8 +45,8 @@ METRIC_LABELS = {
 JOINT_METRICS = tuple(METRIC_LABELS)
 
 
-def _team_payload(key: str) -> dict:
-    team = get_team(key)
+def _team_payload(key: str, league_slug: str | None = None) -> dict:
+    team = get_team(key, league_slug)
     return {
         "key": team.key,
         "name": team.name,
@@ -71,6 +71,7 @@ def _remove_margin(odds: dict[str, float | None]) -> dict[str, float] | None:
 
 @dataclass
 class Engine:
+    league: config.League
     results: pd.DataFrame
     view: pd.DataFrame
     goals_model: dc.GoalsModel
@@ -179,9 +180,10 @@ class Engine:
             "date": fixture["date"],
             "time": str(fixture.get("time") or "--:--"),
             "round": str(fixture.get("round") or ""),
-            "league": config.LEAGUE_NAME,
-            "home": _team_payload(home),
-            "away": _team_payload(away),
+            "league": self.league.name,
+            "league_slug": self.league.slug,
+            "home": _team_payload(home, self.league.slug),
+            "away": _team_payload(away, self.league.slug),
             "goals": {
                 "home": lambda_home,
                 "away": lambda_away,
@@ -212,13 +214,14 @@ class Engine:
         prediction["confidence"] = self._confidence(home, away, outcome)
 
         if full:
+            slug = self.league.slug
             prediction["form"] = {
-                "home": ft.recent_form(self.view, home),
-                "away": ft.recent_form(self.view, away),
-                "home_at_home": ft.recent_form(self.view, home, venue="home"),
-                "away_at_away": ft.recent_form(self.view, away, venue="away"),
+                "home": ft.recent_form(self.view, home, league=slug),
+                "away": ft.recent_form(self.view, away, league=slug),
+                "home_at_home": ft.recent_form(self.view, home, venue="home", league=slug),
+                "away_at_away": ft.recent_form(self.view, away, venue="away", league=slug),
             }
-            prediction["h2h"] = ft.head_to_head(self.results, home, away)
+            prediction["h2h"] = ft.head_to_head(self.results, home, away, league=slug)
             prediction["standings"] = {
                 "home": self._standing_row(home),
                 "away": self._standing_row(away),
@@ -720,13 +723,14 @@ def league_base_rates(results: pd.DataFrame) -> dict[str, float]:
 # --- Construcción y caché del motor -----------------------------------------
 
 _lock = threading.Lock()
-_engine: Engine | None = None
-_engine_built_at: float = 0.0
+_engines: dict[str, Engine] = {}
+_engine_built_at: dict[str, float] = {}
 ENGINE_TTL_SECONDS = 3 * 3600
 
 
-def build_engine() -> Engine:
-    results = loader.load_results()
+def build_engine(league: config.League | str | None = None) -> Engine:
+    league = config.get_league(league)
+    results = loader.load_results(league)
     if results.empty:
         raise RuntimeError(
             "No se pudieron cargar datos históricos. Comprueba la conexión a internet."
@@ -756,6 +760,7 @@ def build_engine() -> Engine:
     joint_model = joint.fit_joint_model(results, goals_model, secondary, JOINT_METRICS)
 
     engine = Engine(
+        league=league,
         results=results,
         view=ft.long_view(results),
         goals_model=goals_model,
@@ -768,7 +773,8 @@ def build_engine() -> Engine:
         reference_date=reference,
     )
     log.info(
-        "Modelo entrenado con %s partidos (%s equipos, localía %.3f, rho %.3f)",
+        "Modelo %s entrenado con %s partidos (%s equipos, localía %.3f, rho %.3f)",
+        league.name,
         goals_model.matches_used,
         len(goals_model.teams),
         goals_model.home_advantage,
@@ -782,18 +788,21 @@ def build_engine() -> Engine:
     return engine
 
 
-def get_engine(force: bool = False) -> Engine:
-    global _engine, _engine_built_at
+def get_engine(league: config.League | str | None = None, force: bool = False) -> Engine:
+    league = config.get_league(league)
     with _lock:
-        expired = (time.time() - _engine_built_at) > ENGINE_TTL_SECONDS
-        if force or _engine is None or expired:
-            _engine = build_engine()
-            _engine_built_at = time.time()
-        return _engine
+        built_at = _engine_built_at.get(league.slug, 0.0)
+        expired = (time.time() - built_at) > ENGINE_TTL_SECONDS
+        current = _engines.get(league.slug)
+        if force or current is None or expired:
+            current = build_engine(league)
+            _engines[league.slug] = current
+            _engine_built_at[league.slug] = time.time()
+        return current
 
 
 def upcoming_fixtures(engine: Engine) -> pd.DataFrame:
-    return loader.load_fixtures(known_teams=set(engine.goals_model.teams))
+    return loader.load_fixtures(engine.league, known_teams=set(engine.goals_model.teams))
 
 
 def upcoming_predictions(

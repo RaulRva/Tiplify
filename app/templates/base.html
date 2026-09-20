@@ -10,15 +10,20 @@
 <body>
   <header class="topbar">
     <div class="wrap topbar-inner">
-      <a class="brand" href="/">
+      <a class="brand" href="{{ paths.home }}">
         <span class="brand-mark">T</span>
         <span class="brand-text">Tiplify<small>{{ league }} · {{ season }}</small></span>
       </a>
+      <nav class="league-switch" aria-label="Ligas">
+        {% for item in leagues %}
+        <a href="/{{ item.slug }}" class="{{ 'active' if item.slug == league_slug else '' }}">{{ item.short }}</a>
+        {% endfor %}
+      </nav>
       <nav class="nav">
-        <a href="/" class="{{ 'active' if request.url.path == '/' else '' }}">Partidos</a>
-        <a href="/clasificacion" class="{{ 'active' if request.url.path == '/clasificacion' else '' }}">Clasificación</a>
-        <a href="/api/partidos" class="muted-link">API</a>
-        <a href="/actualizar" class="btn-refresh" title="Vuelve a descargar los datos y reentrena el modelo">Actualizar datos</a>
+        <a href="{{ paths.home }}" class="{{ 'active' if section == 'matches' else '' }}">Partidos</a>
+        <a href="{{ paths.standings }}" class="{{ 'active' if section == 'standings' else '' }}">Clasificación</a>
+        <a href="{{ paths.api }}" class="muted-link">API</a>
+        <a href="{{ paths.refresh }}" class="btn-refresh" title="Vuelve a descargar los datos y reentrena el modelo">Actualizar datos</a>
       </nav>
     </div>
   </header>
@@ -31,7 +36,7 @@
     <div class="wrap">
       <p>
         Datos: resultados y estadísticas de <strong>football-data.co.uk</strong>,
-        calendario de <strong>openfootball</strong>. Horarios en hora peninsular española.
+        calendario de <strong>openfootball</strong>. {{ kickoff_note }}
         {% if results_updated %}Actualizado el {{ results_updated | date_time }}.{% endif %}
       </p>
       <p class="disclaimer">

@@ -14,7 +14,9 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
 
 def main() -> int:
-    engine = predictor.get_engine()
+    slug = sys.argv[1] if len(sys.argv) > 1 else None
+    engine = predictor.get_engine(slug)
+    print(f"Liga: {engine.league.name} ({engine.league.slug})")
     gm = engine.goals_model
     print(f"\nPartidos de entrenamiento: {gm.matches_used}")
     print(f"Equipos: {len(gm.teams)}")

@@ -21,7 +21,7 @@ from .model import predictor
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("tiplify")
 
-app = FastAPI(title="Tiplify", description="Pronósticos de LaLiga con modelos estadísticos")
+app = FastAPI(title="Tiplify", description="Pronósticos de LaLiga, Premier League y Serie A")
 app.mount("/static", StaticFiles(directory=config.BASE_DIR / "app" / "static"), name="static")
 templates = Jinja2Templates(directory=str(config.BASE_DIR / "app" / "templates"))
 
@@ -116,7 +116,7 @@ def jsonable(value):
     """Convierte numpy/pandas a tipos serializables en JSON."""
     if isinstance(value, dict):
         return {key: jsonable(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, (list, tuple, set, frozenset)):
         return [jsonable(item) for item in value]
     if isinstance(value, (np.integer,)):
         return int(value)
@@ -133,8 +133,8 @@ def jsonable(value):
     return value
 
 
-def freshness_context() -> dict:
-    info = loader.data_freshness()
+def freshness_context(league: config.League | None = None) -> dict:
+    info = loader.data_freshness(league)
     return {
         "results_updated": info.get("results"),
         "fixtures_updated": info.get("fixtures"),
@@ -142,15 +142,33 @@ def freshness_context() -> dict:
     }
 
 
-def base_context(request: Request, engine: predictor.Engine | None = None) -> dict:
+def parse_league(slug: str) -> config.League:
+    try:
+        return config.get_league(slug)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Liga no encontrada") from None
+
+
+def base_context(request: Request, engine: predictor.Engine | None = None, league: config.League | None = None) -> dict:
+    league = league or (engine.league if engine is not None else config.default_league())
     context = {
         "request": request,
-        "league": config.LEAGUE_NAME,
-        "country": config.LEAGUE_COUNTRY,
+        "league": league.name,
+        "league_slug": league.slug,
+        "country": league.country,
+        "kickoff_note": league.kickoff_note,
         "season": config.season_label(),
         "margin_1x2": config.MARGIN_1X2,
         "margin_binary": config.MARGIN_BINARY,
-        **freshness_context(),
+        "leagues": list(config.LEAGUES.values()),
+        "paths": {
+            "home": f"/{league.slug}",
+            "standings": f"/{league.slug}/clasificacion",
+            "refresh": f"/{league.slug}/actualizar",
+            "api": f"/api/{league.slug}/partidos",
+        },
+        "section": "",
+        **freshness_context(league),
     }
     if engine is not None:
         goals = engine.goals_model
@@ -167,10 +185,10 @@ def base_context(request: Request, engine: predictor.Engine | None = None) -> di
     return context
 
 
-def error_page(request: Request, message: str, status_code: int = 500):
+def error_page(request: Request, message: str, status_code: int = 500, league: config.League | None = None):
     return templates.TemplateResponse(
         "error.html",
-        {**base_context(request), "message": message},
+        {**base_context(request, league=league), "message": message},
         status_code=status_code,
     )
 
@@ -178,13 +196,12 @@ def error_page(request: Request, message: str, status_code: int = 500):
 # --- Vistas ------------------------------------------------------------------
 
 
-@app.get("/")
-def index(request: Request, n: int = Query(DEFAULT_LIMIT, ge=1, le=380)):
+def _matches_page(request: Request, league: config.League, n: int):
     try:
-        engine = predictor.get_engine()
+        engine = predictor.get_engine(league)
     except Exception as exc:
         log.exception("Fallo al preparar el modelo")
-        return error_page(request, str(exc))
+        return error_page(request, str(exc), league=league)
 
     fixtures = predictor.upcoming_fixtures(engine)
     total_upcoming = len(fixtures)
@@ -195,10 +212,12 @@ def index(request: Request, n: int = Query(DEFAULT_LIMIT, ge=1, le=380)):
         for day, group in groupby(predictions, key=lambda item: pd.Timestamp(item["date"]).date())
     ]
 
+    context = base_context(request, engine, league)
+    context["section"] = "matches"
     return templates.TemplateResponse(
         "index.html",
         {
-            **base_context(request, engine),
+            **context,
             "days": days,
             "shown": len(predictions),
             "total_upcoming": total_upcoming,
@@ -208,13 +227,12 @@ def index(request: Request, n: int = Query(DEFAULT_LIMIT, ge=1, le=380)):
     )
 
 
-@app.get("/partido/{match_id}")
-def match_detail(request: Request, match_id: str):
+def _match_page(request: Request, league: config.League, match_id: str):
     try:
-        engine = predictor.get_engine()
+        engine = predictor.get_engine(league)
     except Exception as exc:
         log.exception("Fallo al preparar el modelo")
-        return error_page(request, str(exc))
+        return error_page(request, str(exc), league=league)
 
     prediction = predictor.find_prediction(engine, match_id)
     if prediction is None:
@@ -222,12 +240,15 @@ def match_detail(request: Request, match_id: str):
             request,
             "No he encontrado ese partido entre los próximos del calendario.",
             status_code=404,
+            league=league,
         )
 
+    context = base_context(request, engine, league)
+    context["section"] = "matches"
     return templates.TemplateResponse(
         "match.html",
         {
-            **base_context(request, engine),
+            **context,
             "p": prediction,
             "main_lines": config.MAIN_LINES,
             "form_matches": config.FORM_MATCHES,
@@ -235,13 +256,12 @@ def match_detail(request: Request, match_id: str):
     )
 
 
-@app.get("/clasificacion")
-def standings_page(request: Request):
+def _standings_page(request: Request, league: config.League):
     try:
-        engine = predictor.get_engine()
+        engine = predictor.get_engine(league)
     except Exception as exc:
         log.exception("Fallo al preparar el modelo")
-        return error_page(request, str(exc))
+        return error_page(request, str(exc), league=league)
 
     table = engine.table
     rows = []
@@ -253,7 +273,7 @@ def standings_page(request: Request):
         rows.append(
             {
                 **record,
-                "display": ft.display_name(team),
+                "display": ft.display_name(team, league.slug),
                 "attack": strength["attack"],
                 "defence": strength["defence"],
                 "corners_rate": corners.team_profile(team)["generate"] if corners else None,
@@ -261,21 +281,89 @@ def standings_page(request: Request):
             }
         )
 
-    return templates.TemplateResponse(
-        "standings.html",
-        {**base_context(request, engine), "rows": rows},
-    )
+    context = base_context(request, engine, league)
+    context["section"] = "standings"
+    return templates.TemplateResponse("standings.html", {**context, "rows": rows})
+
+
+@app.get("/")
+def index(request: Request, n: int = Query(DEFAULT_LIMIT, ge=1, le=380)):
+    return _matches_page(request, config.default_league(), n)
+
+
+@app.get("/partido/{match_id}")
+def match_detail(request: Request, match_id: str):
+    return _match_page(request, config.default_league(), match_id)
+
+
+@app.get("/clasificacion")
+def standings_page(request: Request):
+    return _standings_page(request, config.default_league())
 
 
 @app.post("/actualizar")
 @app.get("/actualizar")
 def refresh():
     loader.clear_cache()
-    predictor.get_engine(force=True)
-    return RedirectResponse(url="/", status_code=303)
+    predictor.get_engine(config.default_league(), force=True)
+    return RedirectResponse(url="/laliga", status_code=303)
+
+
+@app.get("/{league}")
+def index_league(
+    request: Request,
+    league: str,
+    n: int = Query(DEFAULT_LIMIT, ge=1, le=380),
+):
+    return _matches_page(request, parse_league(league), n)
+
+
+@app.get("/{league}/partido/{match_id}")
+def match_detail_league(request: Request, league: str, match_id: str):
+    return _match_page(request, parse_league(league), match_id)
+
+
+@app.get("/{league}/clasificacion")
+def standings_league(request: Request, league: str):
+    return _standings_page(request, parse_league(league))
+
+
+@app.post("/{league}/actualizar")
+@app.get("/{league}/actualizar")
+def refresh_league(league: str):
+    chosen = parse_league(league)
+    loader.clear_cache()
+    predictor.get_engine(chosen, force=True)
+    return RedirectResponse(url=f"/{chosen.slug}", status_code=303)
 
 
 # --- API JSON ----------------------------------------------------------------
+
+
+def _api_status_payload(engine: predictor.Engine) -> dict:
+    league = engine.league
+    return {
+        "liga": league.name,
+        "slug": league.slug,
+        "temporada": config.season_label(),
+        "partidos_entrenamiento": engine.goals_model.matches_used,
+        "equipos": len(engine.goals_model.teams),
+        "ventaja_local": engine.goals_model.home_advantage,
+        "rho": engine.goals_model.rho,
+        "modelo_entrenado": engine.fitted_at,
+        "datos": loader.data_freshness(league),
+        "metricas": {
+            name: None
+            if model is None
+            else {
+                "media_local": model.league_home,
+                "media_visitante": model.league_away,
+                "dispersion": model.dispersion,
+                "partidos": model.matches_used,
+            }
+            for name, model in engine.secondary.items()
+        },
+    }
 
 
 @app.get("/api/partidos")
@@ -297,28 +385,28 @@ def api_match(match_id: str):
 @app.get("/api/estado")
 def api_status():
     engine = predictor.get_engine()
-    return JSONResponse(
-        jsonable(
-            {
-                "liga": config.LEAGUE_NAME,
-                "temporada": config.season_label(),
-                "partidos_entrenamiento": engine.goals_model.matches_used,
-                "equipos": len(engine.goals_model.teams),
-                "ventaja_local": engine.goals_model.home_advantage,
-                "rho": engine.goals_model.rho,
-                "modelo_entrenado": engine.fitted_at,
-                "datos": loader.data_freshness(),
-                "metricas": {
-                    name: None
-                    if model is None
-                    else {
-                        "media_local": model.league_home,
-                        "media_visitante": model.league_away,
-                        "dispersion": model.dispersion,
-                        "partidos": model.matches_used,
-                    }
-                    for name, model in engine.secondary.items()
-                },
-            }
-        )
-    )
+    return JSONResponse(jsonable(_api_status_payload(engine)))
+
+
+@app.get("/api/{league}/partidos")
+def api_matches_league(
+    league: str, n: int = Query(DEFAULT_LIMIT, ge=1, le=380), completo: bool = False
+):
+    engine = predictor.get_engine(parse_league(league))
+    predictions = predictor.upcoming_predictions(engine, limit=n, full=completo)
+    return JSONResponse(jsonable({"total": len(predictions), "partidos": predictions}))
+
+
+@app.get("/api/{league}/partidos/{match_id}")
+def api_match_league(league: str, match_id: str):
+    engine = predictor.get_engine(parse_league(league))
+    prediction = predictor.find_prediction(engine, match_id)
+    if prediction is None:
+        raise HTTPException(status_code=404, detail="Partido no encontrado")
+    return JSONResponse(jsonable(prediction))
+
+
+@app.get("/api/{league}/estado")
+def api_status_league(league: str):
+    engine = predictor.get_engine(parse_league(league))
+    return JSONResponse(jsonable(_api_status_payload(engine)))

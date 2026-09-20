@@ -80,7 +80,7 @@
 {% endmacro %}
 
 {% block content %}
-<a class="back" href="/">← Todos los partidos</a>
+<a class="back" href="{{ paths.home }}">← Todos los partidos</a>
 
 <section class="match-hero">
   <div class="match-hero-meta">
@@ -167,7 +167,7 @@
   <p class="note">
     La <strong>cuota de casa</strong> es una estimación de lo que verías en una
     casa de apuestas: se parte de la cuota justa del modelo y se le aplica el
-    margen medido sobre el histórico de LaLiga, un {{ margin_1x2 | pct }} en el 1X2 y un
+    margen medido sobre el histórico del mercado, un {{ margin_1x2 | pct }} en el 1X2 y un
     {{ margin_binary | pct }} en los más/menos. No es la cuota de ninguna casa
     concreta, y el margen de córners y tarjetas es una aproximación porque no
     hay datos de esos mercados. La <strong>cuota justa</strong> es la que haría

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import os
+from dataclasses import dataclass
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -12,11 +13,71 @@ CACHE_DIR = (
     Path("/tmp/tiplify-cache") if os.environ.get("VERCEL") else BASE_DIR / ".cache"
 )
 
-# --- Liga -------------------------------------------------------------------
-# Código de football-data.co.uk: SP1 = LaLiga (Primera División).
-LEAGUE_CODE = "SP1"
-LEAGUE_NAME = "LaLiga"
-LEAGUE_COUNTRY = "España"
+
+@dataclass(frozen=True)
+class League:
+    slug: str
+    code: str  # football-data.co.uk (SP1, E0, I1)
+    name: str
+    short: str
+    country: str
+    calendar_file: str  # openfootball (es.1.json, en.1.json, it.1.json)
+    kickoff_note: str
+
+
+# Cada liga tiene su propio histórico, calendario y motor. Los parámetros del
+# modelo (decaimiento, ridge, márgenes) se reutilizan: salieron de un backtest
+# en LaLiga y son un punto de partida razonable, no un ajuste fino por país.
+LEAGUES: dict[str, League] = {
+    "laliga": League(
+        slug="laliga",
+        code="SP1",
+        name="LaLiga",
+        short="LaLiga",
+        country="España",
+        calendar_file="es.1.json",
+        kickoff_note="Horarios en hora peninsular española.",
+    ),
+    "premier": League(
+        slug="premier",
+        code="E0",
+        name="Premier League",
+        short="Premier",
+        country="Inglaterra",
+        calendar_file="en.1.json",
+        kickoff_note="Horarios en hora de Londres.",
+    ),
+    "serie-a": League(
+        slug="serie-a",
+        code="I1",
+        name="Serie A",
+        short="Serie A",
+        country="Italia",
+        calendar_file="it.1.json",
+        kickoff_note="Horarios en hora de Italia.",
+    ),
+}
+DEFAULT_LEAGUE_SLUG = "laliga"
+
+
+def get_league(value: League | str | None = None) -> League:
+    if isinstance(value, League):
+        return value
+    slug = (value or DEFAULT_LEAGUE_SLUG).strip().lower()
+    league = LEAGUES.get(slug)
+    if league is None:
+        raise KeyError(slug)
+    return league
+
+
+def default_league() -> League:
+    return LEAGUES[DEFAULT_LEAGUE_SLUG]
+
+
+# Compatibilidad con el código y los scripts que aún hablan de "la liga".
+LEAGUE_CODE = LEAGUES[DEFAULT_LEAGUE_SLUG].code
+LEAGUE_NAME = LEAGUES[DEFAULT_LEAGUE_SLUG].name
+LEAGUE_COUNTRY = LEAGUES[DEFAULT_LEAGUE_SLUG].country
 
 # Temporadas usadas para entrenar (la más reciente primero).
 # El decaimiento temporal reduce automáticamente el peso de las antiguas.
@@ -27,7 +88,7 @@ RESULTS_URL = "https://www.football-data.co.uk/mmz4281/{season}/{league}.csv"
 FIXTURES_URL = "https://www.football-data.co.uk/fixtures.csv"
 # Calendario completo de las 38 jornadas.
 CALENDAR_URL = (
-    "https://raw.githubusercontent.com/openfootball/football.json/master/{label}/es.1.json"
+    "https://raw.githubusercontent.com/openfootball/football.json/master/{label}/{file}"
 )
 
 # --- Caché ------------------------------------------------------------------

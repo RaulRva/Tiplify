@@ -1,9 +1,10 @@
 # Tiplify
 
-Pronósticos de **LaLiga** con modelos estadísticos: probabilidad de victoria,
-empate y derrota, goles esperados, y estimaciones de córners, tarjetas y tiros
-para cada partido. Se calculan a partir de la forma reciente de cada equipo, de
-lo que genera y concede, y del historial de enfrentamientos directos.
+Pronósticos de **LaLiga**, **Premier League** y **Serie A** con modelos
+estadísticos: probabilidad de victoria, empate y derrota, goles esperados, y
+estimaciones de córners, tarjetas y tiros para cada partido. Se calculan a
+partir de la forma reciente de cada equipo, de lo que genera y concede, y del
+historial de enfrentamientos directos.
 
 Abres la app, ves la lista de próximos partidos y al entrar en uno tienes la
 ficha completa.
@@ -19,8 +20,10 @@ Doble clic en **`run.bat`**, o desde PowerShell:
 .\run.ps1
 ```
 
-Luego abre <http://127.0.0.1:8000>. La primera carga descarga los datos y
-entrena el modelo (unos 15 segundos); después queda en caché.
+Luego abre <http://127.0.0.1:8000>. Arriba puedes cambiar entre LaLiga,
+Premier League (`/premier`) y Serie A (`/serie-a`). La primera visita a cada
+liga descarga los datos y entrena su modelo (unos 15 segundos); después queda
+en caché.
 
 Si no tienes el entorno creado, `run.ps1` lo crea e instala las dependencias
 solo. A mano sería:
@@ -213,10 +216,11 @@ crece con los partidos disponibles, hasta un máximo del 35 %
 ## Datos
 
 - **Resultados y estadísticas** (goles, xG, tiros, córners, faltas, tarjetas y
-  cuotas): [football-data.co.uk](https://www.football-data.co.uk/spainm.php),
-  últimas 5 temporadas.
+  cuotas): [football-data.co.uk](https://www.football-data.co.uk/) (`SP1`, `E0`,
+  `I1`), últimas 5 temporadas.
 - **Calendario completo** de las 38 jornadas:
-  [openfootball/football.json](https://github.com/openfootball/football.json).
+  [openfootball/football.json](https://github.com/openfootball/football.json)
+  (`es.1.json`, `en.1.json`, `it.1.json`).
 
 Todo se guarda en `.cache/`, así que la app sigue funcionando sin conexión con
 los últimos datos descargados. El botón **Actualizar datos** fuerza una
@@ -226,9 +230,11 @@ descarga limpia y reentrena.
 
 | Ruta | Qué devuelve |
 |---|---|
-| `GET /api/partidos?n=20&completo=false` | Próximos partidos con su pronóstico |
-| `GET /api/partidos/{match_id}` | Ficha completa de un partido |
-| `GET /api/estado` | Estado del modelo y frescura de los datos |
+| `GET /api/{liga}/partidos?n=20&completo=false` | Próximos partidos (`laliga`, `premier`, `serie-a`) |
+| `GET /api/{liga}/partidos/{match_id}` | Ficha completa de un partido |
+| `GET /api/{liga}/estado` | Estado del modelo y frescura de los datos |
+
+Las rutas sin `{liga}` (`/api/partidos`, `/api/estado`) siguen apuntando a LaLiga.
 
 ## Estructura
 
@@ -252,11 +258,10 @@ tools/                 backtest y comprobaciones
 
 ## Añadir otra liga
 
-En `app/config.py` cambia `LEAGUE_CODE` por el código de football-data
-(`E0` Premier League, `I1` Serie A, `D1` Bundesliga, `F1` Ligue 1, `SP2`
-Segunda) y ajusta `CALENDAR_URL` al fichero correspondiente de openfootball
-(`es.1.json`, `en.1.json`, `it.1.json`...). Luego añade los equipos nuevos a
-`app/data/teams.py` y vuelve a correr el backtest.
+Añade una entrada en `LEAGUES` (`app/config.py`) con el código de football-data
+(`E0` Premier, `I1` Serie A, `D1` Bundesliga, `F1` Ligue 1, `SP2` Segunda) y el
+fichero de openfootball (`en.1.json`, `it.1.json`, `de.1.json`...). Luego mete
+los equipos y alias en `app/data/teams.py` y vuelve a correr el backtest.
 
 ## Aviso
 

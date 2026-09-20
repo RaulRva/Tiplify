@@ -21,7 +21,7 @@
   <p>
     El calendario no devuelve partidos pendientes ahora mismo. Puede que la
     temporada haya terminado o que la fuente de datos aún no la haya publicado.
-    Prueba a <a href="/actualizar">actualizar los datos</a>.
+    Prueba a <a href="{{ paths.refresh }}">actualizar los datos</a>.
   </p>
 </div>
 {% endif %}
@@ -31,7 +31,7 @@
 <div class="match-list">
   {% for p in day.matches %}
   {% set favourite = 'home' if p.outcome.home >= p.outcome.draw and p.outcome.home >= p.outcome.away else ('away' if p.outcome.away >= p.outcome.draw else 'draw') %}
-  <a class="match-card" href="/partido/{{ p.match_id }}">
+  <a class="match-card" href="{{ paths.home }}/partido/{{ p.match_id }}">
     <div class="match-head">
       <span class="kick">{{ p.time | kickoff }}</span>
       {% if p.round %}<span class="round">{{ p.round | matchday }}</span>{% endif %}
@@ -103,7 +103,7 @@
 
 {% if shown < total_upcoming %}
 <div class="more">
-  <a class="btn" href="/?n={{ next_limit }}">Ver más partidos ({{ shown }} de {{ total_upcoming }})</a>
+  <a class="btn" href="{{ paths.home }}?n={{ next_limit }}">Ver más partidos ({{ shown }} de {{ total_upcoming }})</a>
 </div>
 {% endif %}
 {% endblock %}

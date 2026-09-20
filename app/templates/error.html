@@ -6,8 +6,8 @@
   <h2>Algo ha fallado</h2>
   <p>{{ message }}</p>
   <p>
-    <a class="btn" href="/actualizar">Reintentar descargando los datos</a>
-    <a class="btn ghost" href="/">Volver al inicio</a>
+    <a class="btn" href="{{ paths.refresh }}">Reintentar descargando los datos</a>
+    <a class="btn ghost" href="{{ paths.home }}">Volver al inicio</a>
   </p>
 </section>
 {% endblock %}

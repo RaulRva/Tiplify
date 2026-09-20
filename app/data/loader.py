@@ -127,12 +127,13 @@ def _normalize(raw: pd.DataFrame, season: str | None = None) -> pd.DataFrame:
     return frame
 
 
-def load_results() -> pd.DataFrame:
+def load_results(league: config.League | str | None = None) -> pd.DataFrame:
     """Histórico de partidos jugados de las temporadas configuradas."""
+    league = config.get_league(league)
     frames: list[pd.DataFrame] = []
     for season in config.SEASONS:
-        url = config.RESULTS_URL.format(season=season, league=config.LEAGUE_CODE)
-        text = _fetch(url, f"{config.LEAGUE_CODE}_{season}.csv", config.RESULTS_TTL_SECONDS)
+        url = config.RESULTS_URL.format(season=season, league=league.code)
+        text = _fetch(url, f"{league.code}_{season}.csv", config.RESULTS_TTL_SECONDS)
         if not text:
             continue
         try:
@@ -160,7 +161,7 @@ def make_match_id(date: pd.Timestamp, home: str, away: str) -> str:
     return f"{date:%Y%m%d}-{slugify(home)}-{slugify(away)}"
 
 
-def _load_odds() -> pd.DataFrame:
+def _load_odds(league: config.League) -> pd.DataFrame:
     """Cuotas de los próximos partidos (football-data cubre ~1 semana)."""
     text = _fetch(config.FIXTURES_URL, "fixtures.csv", config.FIXTURES_TTL_SECONDS)
     if not text:
@@ -175,7 +176,7 @@ def _load_odds() -> pd.DataFrame:
     if "Div" not in raw or "HomeTeam" not in raw:
         return pd.DataFrame()
 
-    raw = raw[raw["Div"].astype(str).str.strip() == config.LEAGUE_CODE]
+    raw = raw[raw["Div"].astype(str).str.strip() == league.code]
     if raw.empty:
         return pd.DataFrame()
 
@@ -187,12 +188,13 @@ def _load_odds() -> pd.DataFrame:
     return odds[columns].drop_duplicates(subset="match_id")
 
 
-def load_calendar() -> pd.DataFrame:
+def load_calendar(league: config.League | str | None = None) -> pd.DataFrame:
     """Calendario completo de la temporada (las 38 jornadas)."""
+    league = config.get_league(league)
     label = config.season_label()
     text = _fetch(
-        config.CALENDAR_URL.format(label=label),
-        f"calendar_{label}.json",
+        config.CALENDAR_URL.format(label=label, file=league.calendar_file),
+        f"calendar_{league.slug}_{label}.json",
         config.CALENDAR_TTL_SECONDS,
     )
     if not text:
@@ -206,8 +208,8 @@ def load_calendar() -> pd.DataFrame:
 
     rows = []
     for match in payload.get("matches", []):
-        home = resolve_key(match.get("team1", ""))
-        away = resolve_key(match.get("team2", ""))
+        home = resolve_key(match.get("team1", ""), league.slug)
+        away = resolve_key(match.get("team2", ""), league.slug)
         if not home or not away:
             log.debug("Equipo sin equivalencia: %s / %s", match.get("team1"), match.get("team2"))
             continue
@@ -229,16 +231,18 @@ def load_calendar() -> pd.DataFrame:
 
 
 def load_fixtures(
+    league: config.League | str | None = None,
     known_teams: set[str] | None = None,
     include_odds: bool = True,
 ) -> pd.DataFrame:
     """Próximos partidos con sus cuotas cuando estén disponibles."""
-    fixtures = load_calendar()
+    league = config.get_league(league)
+    fixtures = load_calendar(league)
     source = "calendar"
 
     if fixtures.empty:
         # Sin calendario completo, al menos mostramos la semana con cuotas.
-        fixtures = _fixtures_from_odds_file()
+        fixtures = _fixtures_from_odds_file(league)
         source = "odds"
         if fixtures.empty:
             return pd.DataFrame()
@@ -263,7 +267,7 @@ def load_fixtures(
     fixtures["source"] = source
 
     if include_odds:
-        odds = _load_odds()
+        odds = _load_odds(league)
         if not odds.empty:
             fixtures = fixtures.merge(odds, on="match_id", how="left", suffixes=("", "_odds"))
 
@@ -276,7 +280,7 @@ def load_fixtures(
     return fixtures.sort_values(["date", "time"]).reset_index(drop=True)
 
 
-def _fixtures_from_odds_file() -> pd.DataFrame:
+def _fixtures_from_odds_file(league: config.League) -> pd.DataFrame:
     """Calendario de emergencia construido desde el fichero de cuotas."""
     text = _fetch(config.FIXTURES_URL, "fixtures.csv", config.FIXTURES_TTL_SECONDS)
     if not text:
@@ -287,7 +291,7 @@ def _fixtures_from_odds_file() -> pd.DataFrame:
         return pd.DataFrame()
     if "Div" not in raw or "HomeTeam" not in raw:
         return pd.DataFrame()
-    raw = raw[raw["Div"].astype(str).str.strip() == config.LEAGUE_CODE]
+    raw = raw[raw["Div"].astype(str).str.strip() == league.code]
     if raw.empty:
         return pd.DataFrame()
     fixtures = _normalize(raw)
@@ -296,13 +300,14 @@ def _fixtures_from_odds_file() -> pd.DataFrame:
     return fixtures[["date", "time", "home", "away", "round", "played"]]
 
 
-def data_freshness() -> dict[str, object]:
+def data_freshness(league: config.League | str | None = None) -> dict[str, object]:
     """Metadatos para mostrar en la UI cuándo se actualizaron los datos."""
+    league = config.get_league(league)
     info: dict[str, object] = {"results": None, "fixtures": None, "calendar": None}
     for label, name in (
-        ("results", f"{config.LEAGUE_CODE}_{config.SEASONS[0]}.csv"),
+        ("results", f"{league.code}_{config.SEASONS[0]}.csv"),
         ("fixtures", "fixtures.csv"),
-        ("calendar", f"calendar_{config.season_label()}.json"),
+        ("calendar", f"calendar_{league.slug}_{config.season_label()}.json"),
     ):
         path = _cache_path(name)
         if path.exists():

@@ -64,6 +64,7 @@ def recent_form(
     team: str,
     matches: int = config.FORM_MATCHES,
     venue: str | None = None,
+    league: str | None = None,
 ) -> dict:
     """Resumen de los últimos `matches` partidos de un equipo."""
     subset = view[view["team"] == team]
@@ -97,7 +98,7 @@ def recent_form(
     recent = [
         {
             "date": row.date,
-            "opponent": display_name(row.opponent),
+            "opponent": display_name(row.opponent, league),
             "venue": row.venue,
             "result": row.result,
             "score": f"{int(row.goals_for)}-{int(row.goals_against)}",
@@ -138,6 +139,7 @@ def head_to_head(
     home: str,
     away: str,
     limit: int = config.H2H_MATCHES,
+    league: str | None = None,
 ) -> dict:
     """Historial de enfrentamientos directos, el más reciente primero."""
     if results.empty:
@@ -182,8 +184,8 @@ def head_to_head(
             {
                 "date": row.date,
                 "season": row.season,
-                "home": display_name(row.home),
-                "away": display_name(row.away),
+                "home": display_name(row.home, league),
+                "away": display_name(row.away, league),
                 "score": f"{hg}-{ag}",
                 "winner": winner,
                 "corners": None if pd.isna(corners) else int(corners),
