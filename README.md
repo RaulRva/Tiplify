@@ -8,6 +8,9 @@ lo que genera y concede, y del historial de enfrentamientos directos.
 Abres la app, ves la lista de próximos partidos y al entrar en uno tienes la
 ficha completa.
 
+**En producción:** [tiplify.vercel.app](https://tiplify.vercel.app) · código en
+[github.com/RaulRva/Tiplify](https://github.com/RaulRva/Tiplify).
+
 ## Arrancar
 
 Doble clic en **`run.bat`**, o desde PowerShell:
