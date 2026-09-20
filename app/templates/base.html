@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Tiplify · Pronósticos de {{ league }}{% endblock %}</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚽</text></svg>">
+</head>
+<body>
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <a class="brand" href="/">
+        <span class="brand-mark">T</span>
+        <span class="brand-text">Tiplify<small>{{ league }} · {{ season }}</small></span>
+      </a>
+      <nav class="nav">
+        <a href="/" class="{{ 'active' if request.url.path == '/' else '' }}">Partidos</a>
+        <a href="/clasificacion" class="{{ 'active' if request.url.path == '/clasificacion' else '' }}">Clasificación</a>
+        <a href="/api/partidos" class="muted-link">API</a>
+        <a href="/actualizar" class="btn-refresh" title="Vuelve a descargar los datos y reentrena el modelo">Actualizar datos</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="footer">
+    <div class="wrap">
+      <p>
+        Datos: resultados y estadísticas de <strong>football-data.co.uk</strong>,
+        calendario de <strong>openfootball</strong>. Horarios en hora peninsular española.
+        {% if results_updated %}Actualizado el {{ results_updated | date_time }}.{% endif %}
+      </p>
+      <p class="disclaimer">
+        Los pronósticos son estimaciones estadísticas, no certezas. El modelo no
+        conoce lesiones, alineaciones ni sanciones de última hora. Juega con
+        responsabilidad.
+      </p>
+    </div>
+  </footer>
+</body>
+</html>

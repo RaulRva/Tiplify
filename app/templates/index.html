@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero">
+  <h1>Próximos partidos de {{ league }}</h1>
+  <p>
+    Probabilidades de victoria, empate y derrota, goles, córners, tarjetas y
+    tiros estimados a partir de la forma de cada equipo y del historial entre
+    ellos. Entra en un partido para ver la ficha completa.
+  </p>
+  <div class="hero-meta">
+    <span><strong>{{ model_matches }}</strong> partidos analizados</span>
+    <span><strong>{{ total_upcoming }}</strong> partidos por jugar</span>
+    <span>el local marca <strong>{{ home_advantage_factor | num(2) }}×</strong> más que el visitante</span>
+  </div>
+</section>
+
+{% if not days %}
+<div class="empty">
+  <h2>No hay partidos próximos</h2>
+  <p>
+    El calendario no devuelve partidos pendientes ahora mismo. Puede que la
+    temporada haya terminado o que la fuente de datos aún no la haya publicado.
+    Prueba a <a href="/actualizar">actualizar los datos</a>.
+  </p>
+</div>
+{% endif %}
+
+{% for day in days %}
+<h2 class="day-heading">{{ day.date | long_date }}</h2>
+<div class="match-list">
+  {% for p in day.matches %}
+  {% set favourite = 'home' if p.outcome.home >= p.outcome.draw and p.outcome.home >= p.outcome.away else ('away' if p.outcome.away >= p.outcome.draw else 'draw') %}
+  <a class="match-card" href="/partido/{{ p.match_id }}">
+    <div class="match-head">
+      <span class="kick">{{ p.time | kickoff }}</span>
+      {% if p.round %}<span class="round">{{ p.round | matchday }}</span>{% endif %}
+      <span class="confidence conf-{{ p.confidence.stars }}" title="Confianza del pronóstico: {{ p.confidence.label }}">
+        Confianza {{ p.confidence.label }}
+      </span>
+    </div>
+
+    <div class="match-teams">
+      <div class="team {{ 'fav' if favourite == 'home' else '' }}">
+        <span class="crest" style="--crest:{{ p.home.color }}; --crest-text:{{ p.home.accent }}">{{ p.home.code }}</span>
+        <span class="team-name">{{ p.home.name }}</span>
+        <span class="streak">
+          {% for r in p.form.home.streak %}<i class="r r-{{ r }}">{{ r }}</i>{% endfor %}
+        </span>
+      </div>
+
+      <div class="expected-score">
+        <div class="score-line">
+          <span>{{ p.goals.home | num(1) }}</span><em>–</em><span>{{ p.goals.away | num(1) }}</span>
+        </div>
+        <small>goles esperados</small>
+      </div>
+
+      <div class="team away {{ 'fav' if favourite == 'away' else '' }}">
+        <span class="crest" style="--crest:{{ p.away.color }}; --crest-text:{{ p.away.accent }}">{{ p.away.code }}</span>
+        <span class="team-name">{{ p.away.name }}</span>
+        <span class="streak">
+          {% for r in p.form.away.streak %}<i class="r r-{{ r }}">{{ r }}</i>{% endfor %}
+        </span>
+      </div>
+    </div>
+
+    <div class="probbar" role="img"
+         aria-label="Local {{ p.outcome.home | pct }}, empate {{ p.outcome.draw | pct }}, visitante {{ p.outcome.away | pct }}">
+      <span class="seg seg-home" style="width: {{ (p.outcome.home * 100) | round(1) }}%">{{ p.outcome.home | pct }}</span>
+      <span class="seg seg-draw" style="width: {{ (p.outcome.draw * 100) | round(1) }}%">{{ p.outcome.draw | pct }}</span>
+      <span class="seg seg-away" style="width: {{ (p.outcome.away * 100) | round(1) }}%">{{ p.outcome.away | pct }}</span>
+    </div>
+    <div class="probbar-legend">
+      <span>1 Local</span><span>X Empate</span><span>2 Visitante</span>
+    </div>
+
+    <div class="mini-stats">
+      {% if p.corners %}<div><b>{{ p.corners.total | num(1) }}</b><span>córners</span></div>{% endif %}
+      {% if p.cards %}<div><b>{{ p.cards.total | num(1) }}</b><span>tarjetas</span></div>{% endif %}
+      {% if p.shots %}<div><b>{{ p.shots.total | num(1) }}</b><span>tiros</span></div>{% endif %}
+      <div><b>{{ p.over25 | pct }}</b><span>+2.5 goles</span></div>
+      <div><b>{{ p.btts | pct }}</b><span>ambos marcan</span></div>
+    </div>
+
+    {% if p.tiers %}
+    <div class="tiers">
+      {% for t in p.tiers %}
+      <div class="tier">
+        <span class="tier-target">~{{ t.target }}</span>
+        <span class="tier-pick">
+          {{ t.selection }}{% if t.combo %} <em class="tier-flag">combi</em>{% endif %}
+        </span>
+        <span class="tier-odds">{{ t.house_odds | num(2) }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </a>
+  {% endfor %}
+</div>
+{% endfor %}
+
+{% if shown < total_upcoming %}
+<div class="more">
+  <a class="btn" href="/?n={{ next_limit }}">Ver más partidos ({{ shown }} de {{ total_upcoming }})</a>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Clasificación y fuerza de los equipos · Tiplify{% endblock %}
+
+{% block content %}
+<section class="hero compact">
+  <h1>Clasificación y fuerza de los equipos</h1>
+  <p>
+    A la izquierda, la clasificación real de {{ league }} {{ season }}. A la
+    derecha, lo que el modelo estima de cada equipo: ataque, defensa y su
+    tendencia a generar córners y tarjetas. <em>1.00×</em> es la media de la liga.
+  </p>
+</section>
+
+<section class="panel">
+  {% if rows %}
+  <div class="table-wrap roomy">
+  <table class="standings">
+    <thead>
+      <tr>
+        <th>#</th><th>Equipo</th><th>PJ</th><th>Pts</th><th>G</th><th>E</th><th>P</th>
+        <th>GF</th><th>GC</th><th>Dif</th>
+        <th>Ataque</th><th>Defensa</th><th>Córners</th><th>Tarjetas</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td class="pos">{{ row.pos }}</td>
+        <td class="team-cell">{{ row.display }}</td>
+        <td>{{ row.partidos }}</td>
+        <td class="points">{{ row.puntos }}</td>
+        <td>{{ row.ganados }}</td>
+        <td>{{ row.empatados }}</td>
+        <td>{{ row.perdidos }}</td>
+        <td>{{ row.gf | int }}</td>
+        <td>{{ row.gc | int }}</td>
+        <td>{{ row.dif | int }}</td>
+        <td class="rate {{ 'good' if row.attack > 1.08 else ('bad' if row.attack < 0.92 else '') }}">
+          {{ row.attack | num(2) }}×
+        </td>
+        <td class="rate {{ 'good' if row.defence < 0.92 else ('bad' if row.defence > 1.08 else '') }}">
+          {{ row.defence | num(2) }}×
+        </td>
+        <td class="rate">{{ row.corners_rate | num(2) }}×</td>
+        <td class="rate">{{ row.cards_rate | num(2) }}×</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="note">
+    En la columna de defensa, <strong>menos es mejor</strong>: mide los goles
+    que concede el equipo respecto a la media.
+  </p>
+  {% else %}
+  <p class="note">Todavía no hay partidos de esta temporada para construir la clasificación.</p>
+  {% endif %}
+</section>
+{% endblock %}

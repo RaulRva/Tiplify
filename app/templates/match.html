@@ -1,0 +1,452 @@
+{% extends "base.html" %}
+{% block title %}{{ p.home.name }} vs {{ p.away.name }} · Tiplify{% endblock %}
+
+{% macro line_table(block, unit) %}
+<table class="lines">
+  <thead><tr><th>Línea</th><th>Más de</th><th>Menos de</th></tr></thead>
+  <tbody>
+    {% for row in block.lines %}
+    <tr class="{{ 'main-line' if row.line == main_lines[unit] else '' }}">
+      <td>{{ row.line }}</td>
+      <td class="{{ 'lead' if row.over >= row.under else '' }}">{{ row.over | pct(1) }}</td>
+      <td class="{{ 'lead' if row.under > row.over else '' }}">{{ row.under | pct(1) }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endmacro %}
+
+{% macro split_bar(block, label) %}
+<div class="split">
+  <div class="split-head">
+    <span>{{ label }}</span>
+    <strong>{{ block.total | num(1) }}</strong>
+    <small>media liga {{ block.league_average | num(1) }}</small>
+  </div>
+  <div class="split-bar">
+    <span class="split-home" style="width: {{ (block.home / block.total * 100) | round(1) }}%"></span>
+    <span class="split-away" style="width: {{ (block.away / block.total * 100) | round(1) }}%"></span>
+  </div>
+  <div class="split-values">
+    <span>{{ p.home.code }} {{ block.home | num(1) }}</span>
+    <span>{{ block.away | num(1) }} {{ p.away.code }}</span>
+  </div>
+</div>
+{% endmacro %}
+
+{% macro form_card(team, form, title) %}
+<div class="form-card">
+  <h4>
+    <span class="crest small" style="--crest:{{ team.color }}; --crest-text:{{ team.accent }}">{{ team.code }}</span>
+    {{ title }}
+  </h4>
+  <div class="streak big">
+    {% for r in form.streak %}<i class="r r-{{ r }}">{{ r }}</i>{% endfor %}
+  </div>
+  <dl class="stat-grid">
+    <div><dt>Puntos por partido</dt><dd>{{ form.points_per_game | num(2) }}</dd></div>
+    <div><dt>Goles a favor</dt><dd>{{ form.goals_for | num(2) }}</dd></div>
+    <div><dt>Goles en contra</dt><dd>{{ form.goals_against | num(2) }}</dd></div>
+    {% if form.xg_for is not none %}
+    <div><dt>xG a favor</dt><dd>{{ form.xg_for | num(2) }}</dd></div>
+    <div><dt>xG en contra</dt><dd>{{ form.xg_against | num(2) }}</dd></div>
+    {% endif %}
+    <div><dt>Tiros</dt><dd>{{ form.shots_for | num(1) }}</dd></div>
+    <div><dt>Tiros a puerta</dt><dd>{{ form.shots_target_for | num(1) }}</dd></div>
+    <div><dt>Córners a favor</dt><dd>{{ form.corners_for | num(1) }}</dd></div>
+    <div><dt>Córners en contra</dt><dd>{{ form.corners_against | num(1) }}</dd></div>
+    <div><dt>Tarjetas</dt><dd>{{ form.cards_for | num(1) }}</dd></div>
+    <div><dt>Ambos marcan</dt><dd>{{ form.btts_rate | pct }}</dd></div>
+    <div><dt>+2.5 goles</dt><dd>{{ form.over25_rate | pct }}</dd></div>
+    <div><dt>Porterías a cero</dt><dd>{{ form.clean_sheets }}</dd></div>
+  </dl>
+  {% if form.recent %}
+  <ol class="recent">
+    {% for m in form.recent %}
+    <li>
+      <i class="r r-{{ m.result }}">{{ m.result }}</i>
+      <span class="recent-score">{{ m.score }}</span>
+      <span class="recent-opponent">{{ 'vs' if m.venue == 'home' else 'en' }} {{ m.opponent }}</span>
+      <span class="recent-extra">
+        {% if m.corners is not none %}{{ m.corners }} córner{{ '' if m.corners == 1 else 's' }}{% endif %}
+        {% if m.cards is not none %} · {{ m.cards }} tarj.{% endif %}
+      </span>
+      <span class="recent-date">{{ m.date | short_date }}</span>
+    </li>
+    {% endfor %}
+  </ol>
+  {% endif %}
+</div>
+{% endmacro %}
+
+{% block content %}
+<a class="back" href="/">← Todos los partidos</a>
+
+<section class="match-hero">
+  <div class="match-hero-meta">
+    {{ p.date | long_date }} · {{ p.time | kickoff }}
+    {% if p.round %} · {{ p.round | matchday }}{% endif %} · {{ league }}
+  </div>
+
+  <div class="match-hero-teams">
+    <div class="hero-team">
+      <span class="crest xl" style="--crest:{{ p.home.color }}; --crest-text:{{ p.home.accent }}">{{ p.home.code }}</span>
+      <h1>{{ p.home.name }}</h1>
+      {% if p.standings.home %}
+      <p class="standing">{{ p.standings.home.pos }}º · {{ p.standings.home.points }} pts en {{ p.standings.home.played }} partidos</p>
+      {% endif %}
+    </div>
+    <div class="hero-score">
+      <div class="score-line">
+        <span>{{ p.goals.home | num(1) }}</span><em>–</em><span>{{ p.goals.away | num(1) }}</span>
+      </div>
+      <small>marcador esperado</small>
+    </div>
+    <div class="hero-team">
+      <span class="crest xl" style="--crest:{{ p.away.color }}; --crest-text:{{ p.away.accent }}">{{ p.away.code }}</span>
+      <h1>{{ p.away.name }}</h1>
+      {% if p.standings.away %}
+      <p class="standing">{{ p.standings.away.pos }}º · {{ p.standings.away.points }} pts en {{ p.standings.away.played }} partidos</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <p class="summary">{{ p.summary }}</p>
+</section>
+
+{% if p.tiers %}
+<section class="panel">
+  <h2>Tres apuestas, tres niveles de riesgo</h2>
+  <div class="tier-cards">
+    {% for t in p.tiers %}
+    <div class="tier-card tier-{{ loop.index }}">
+      <span class="tier-badge">
+        Objetivo ~{{ t.target }}{% if t.combo %} · Combinada{% endif %}
+      </span>
+      {% if t.combo %}
+      <ol class="tier-legs">
+        {% for leg in t.legs %}
+        <li>
+          <strong>{{ leg.selection }}</strong>
+          <span>{{ leg.market }} · {{ leg.prob | pct }} · cuota {{ leg.house_odds | num(2) }}</span>
+        </li>
+        {% endfor %}
+      </ol>
+      {% else %}
+      <strong class="tier-selection">{{ t.selection }}</strong>
+      <span class="tier-market">{{ t.market }}</span>
+      {% endif %}
+      <div class="tier-numbers">
+        <div><b>{{ t.house_odds | num(2) }}</b><span>cuota de casa</span></div>
+        <div><b>{{ t.odds | num(2) }}</b><span>cuota justa</span></div>
+        <div><b>{{ t.prob | pct(1) }}</b><span>probabilidad</span></div>
+      </div>
+      {% if t.combo and t.correlation_gap | abs > 0.02 %}
+      <p class="tier-note">
+        Multiplicar las dos cuotas daría {{ t.independent_odds | num(2) }}, pero las
+        patas están correlacionadas:
+        {% if t.correlation_gap > 0 %}
+        suelen pasar juntas, así que la combinada es {{ t.correlation_gap | pct }} más
+        probable de lo que sugiere el producto.
+        {% else %}
+        se estorban entre sí, así que es {{ -t.correlation_gap | pct }} menos probable
+        de lo que sugiere el producto.
+        {% endif %}
+      </p>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  <p class="note">
+    Tres apuestas escalonadas por riesgo, cada una de mercados distintos para
+    que no se contradigan entre sí. Cuando una selección simple no llega a la
+    cuota buscada se combinan dos, y entonces la cuota <em>no</em> es el
+    producto de las patas: se calcula simulando el partido 20.000 veces con la
+    correlación real entre goles, córners, tarjetas y tiros.
+  </p>
+  <p class="note">
+    La <strong>cuota de casa</strong> es una estimación de lo que verías en una
+    casa de apuestas: se parte de la cuota justa del modelo y se le aplica el
+    margen medido sobre el histórico de LaLiga, un {{ margin_1x2 | pct }} en el 1X2 y un
+    {{ margin_binary | pct }} en los más/menos. No es la cuota de ninguna casa
+    concreta, y el margen de córners y tarjetas es una aproximación porque no
+    hay datos de esos mercados. La <strong>cuota justa</strong> es la que haría
+    la apuesta neutra a largo plazo: la diferencia entre las dos es
+    exactamente lo que se queda la casa.
+  </p>
+</section>
+{% endif %}
+
+<section class="panel">
+  <h2>Resultado del partido</h2>
+  <div class="outcome-cards">
+    <div class="outcome {{ 'best' if p.outcome.home >= p.outcome.draw and p.outcome.home >= p.outcome.away else '' }}">
+      <span class="outcome-label">1 · Gana {{ p.home.name }}</span>
+      <span class="outcome-prob">{{ p.outcome.home | pct(1) }}</span>
+      <span class="outcome-odds">cuota justa {{ (1 / p.outcome.home) | num(2) }}</span>
+    </div>
+    <div class="outcome {{ 'best' if p.outcome.draw > p.outcome.home and p.outcome.draw >= p.outcome.away else '' }}">
+      <span class="outcome-label">X · Empate</span>
+      <span class="outcome-prob">{{ p.outcome.draw | pct(1) }}</span>
+      <span class="outcome-odds">cuota justa {{ (1 / p.outcome.draw) | num(2) }}</span>
+    </div>
+    <div class="outcome {{ 'best' if p.outcome.away > p.outcome.home and p.outcome.away > p.outcome.draw else '' }}">
+      <span class="outcome-label">2 · Gana {{ p.away.name }}</span>
+      <span class="outcome-prob">{{ p.outcome.away | pct(1) }}</span>
+      <span class="outcome-odds">cuota justa {{ (1 / p.outcome.away) | num(2) }}</span>
+    </div>
+  </div>
+
+  <div class="probbar tall">
+    <span class="seg seg-home" style="width: {{ (p.outcome.home * 100) | round(1) }}%">{{ p.outcome.home | pct }}</span>
+    <span class="seg seg-draw" style="width: {{ (p.outcome.draw * 100) | round(1) }}%">{{ p.outcome.draw | pct }}</span>
+    <span class="seg seg-away" style="width: {{ (p.outcome.away * 100) | round(1) }}%">{{ p.outcome.away | pct }}</span>
+  </div>
+
+  <div class="chips">
+    <div class="chip"><span>{{ p.home.name }} o empate</span><b>{{ p.double_chance.home_draw | pct(1) }}</b></div>
+    <div class="chip"><span>Empate o {{ p.away.name }}</span><b>{{ p.double_chance.draw_away | pct(1) }}</b></div>
+    <div class="chip"><span>Gana uno de los dos</span><b>{{ p.double_chance.no_draw | pct(1) }}</b></div>
+    <div class="chip"><span>{{ p.home.code }} gana por 2+</span><b>{{ p.margins.home_by_2plus | pct(1) }}</b></div>
+    <div class="chip"><span>{{ p.away.code }} gana por 2+</span><b>{{ p.margins.away_by_2plus | pct(1) }}</b></div>
+  </div>
+</section>
+
+<div class="grid-2">
+  <section class="panel">
+    <h2>Goles</h2>
+    <div class="big-numbers">
+      <div><b>{{ p.goals.total | num(2) }}</b><span>goles totales esperados</span></div>
+      <div><b>{{ p.btts | pct(1) }}</b><span>ambos equipos marcan</span></div>
+    </div>
+    <table class="lines">
+      <thead><tr><th>Línea</th><th>Más de</th><th>Menos de</th></tr></thead>
+      <tbody>
+        {% for row in p.goal_lines %}
+        <tr class="{{ 'main-line' if row.line == main_lines.goals else '' }}">
+          <td>{{ row.line }}</td>
+          <td class="{{ 'lead' if row.over >= row.under else '' }}">{{ row.over | pct(1) }}</td>
+          <td class="{{ 'lead' if row.under > row.over else '' }}">{{ row.under | pct(1) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if p.goals.xg_weight %}
+    <p class="note">
+      Incluye un {{ p.goals.xg_weight | pct }} de peso del modelo de goles
+      esperados (xG) de esta temporada.
+    </p>
+    {% endif %}
+  </section>
+
+  <section class="panel">
+    <h2>Marcadores más probables</h2>
+    <ul class="scorelines">
+      {% for s in p.scorelines %}
+      <li>
+        <span class="score">{{ s.home }}–{{ s.away }}</span>
+        <span class="score-bar"><i style="width: {{ (s.prob / p.scorelines[0].prob * 100) | round(1) }}%"></i></span>
+        <span class="score-prob">{{ s.prob | pct(1) }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+</div>
+
+<section class="panel">
+  <h2>Córners, tarjetas y tiros</h2>
+  <div class="grid-3">
+    {% if p.corners %}
+    <div class="metric">
+      <h3>Córners</h3>
+      {{ split_bar(p.corners, 'Total esperado') }}
+      {{ line_table(p.corners, 'corners') }}
+    </div>
+    {% endif %}
+    {% if p.cards %}
+    <div class="metric">
+      <h3>Tarjetas</h3>
+      {{ split_bar(p.cards, 'Total esperado') }}
+      {{ line_table(p.cards, 'cards') }}
+    </div>
+    {% endif %}
+    {% if p.shots %}
+    <div class="metric">
+      <h3>Tiros</h3>
+      {{ split_bar(p.shots, 'Total esperado') }}
+      {{ line_table(p.shots, 'shots') }}
+    </div>
+    {% endif %}
+    {% if p.shots_target %}
+    <div class="metric">
+      <h3>Tiros a puerta</h3>
+      {{ split_bar(p.shots_target, 'Total esperado') }}
+      {{ line_table(p.shots_target, 'shots_target') }}
+    </div>
+    {% endif %}
+  </div>
+  {% if p.fouls %}
+  <p class="note">
+    Faltas esperadas: {{ p.fouls.home | num(1) }} de {{ p.home.name }} y
+    {{ p.fouls.away | num(1) }} de {{ p.away.name }}
+    ({{ p.fouls.total | num(1) }} en total).
+  </p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Pronósticos destacados</h2>
+  <div class="table-wrap">
+  <table class="picks">
+    <thead>
+      <tr>
+        <th>Mercado</th><th>Selección</th><th>Probabilidad</th>
+        <th>En la liga</th><th>Diferencia</th><th>Cuota justa</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for pick in p.picks %}
+      <tr>
+        <td class="market">{{ pick.market }}</td>
+        <td><strong>{{ pick.selection }}</strong></td>
+        <td class="prob">
+          <span class="prob-bar"><i style="width: {{ (pick.prob * 100) | round(1) }}%"></i></span>
+          {{ pick.prob | pct(1) }}
+        </td>
+        <td class="dim">{{ pick.base | pct }}</td>
+        <td class="{{ 'edge-positive' if pick.edge > 0 else 'edge-negative' }}">
+          {{ pick.edge | signed }} pts
+        </td>
+        <td>{{ (1 / pick.prob) | num(2) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="note">
+    Ordenados por lo que se salen de lo habitual, no por probabilidad bruta:
+    "en la liga" es la frecuencia histórica de esa selección en {{ league }}, y
+    la diferencia mide cuánto se desvía este partido de ella. Un 74% en un
+    mercado que ya ocurre el 74% de las veces no dice nada.
+    La "cuota justa" es 1 dividido entre la probabilidad: si una casa ofrece
+    más que eso, la apuesta tiene valor esperado positivo según el modelo.
+  </p>
+</section>
+
+{% if p.market.available %}
+<section class="panel">
+  <h2>Modelo vs mercado</h2>
+  <div class="table-wrap">
+  <table class="market">
+    <thead>
+      <tr><th>Resultado</th><th>Cuota media</th><th>Mercado</th><th>Modelo</th><th>Diferencia</th></tr>
+    </thead>
+    <tbody>
+      {% for key, label in [('home', '1 · ' ~ p.home.name), ('draw', 'X · Empate'), ('away', '2 · ' ~ p.away.name)] %}
+      <tr>
+        <td>{{ label }}</td>
+        <td>{{ p.market.odds[key] | num(2) }}</td>
+        <td>{{ p.market.implied[key] | pct(1) }}</td>
+        <td>{{ p.outcome[key] | pct(1) }}</td>
+        <td class="{{ 'edge-positive' if p.market.edges[key] > 0 else 'edge-negative' }}">
+          {{ p.market.edges[key] | signed }} pts
+        </td>
+      </tr>
+      {% endfor %}
+      {% if p.market.goals %}
+      <tr>
+        <td>Más de 2.5 goles</td>
+        <td>{{ p.market.goals.odds_over | num(2) }}</td>
+        <td>{{ p.market.goals.implied_over25 | pct(1) }}</td>
+        <td>{{ p.market.goals.model_over25 | pct(1) }}</td>
+        <td class="{{ 'edge-positive' if p.market.goals.edge > 0 else 'edge-negative' }}">
+          {{ p.market.goals.edge | signed }} pts
+        </td>
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
+  </div>
+  <p class="note">
+    La columna "mercado" son las cuotas medias convertidas en probabilidad y
+    normalizadas para quitar el margen de la casa. Una diferencia positiva
+    significa que el modelo ve más probable ese resultado que el mercado.
+  </p>
+</section>
+{% endif %}
+
+<section class="panel">
+  <h2>Forma reciente (últimos {{ form_matches }} partidos)</h2>
+  <div class="grid-2">
+    {{ form_card(p.home, p.form.home, p.home.name) }}
+    {{ form_card(p.away, p.form.away, p.away.name) }}
+  </div>
+  {% if p.form.home_at_home.matches or p.form.away_at_away.matches %}
+  <div class="grid-2 venue-split">
+    {{ form_card(p.home, p.form.home_at_home, p.home.name ~ ' como local') }}
+    {{ form_card(p.away, p.form.away_at_away, p.away.name ~ ' como visitante') }}
+  </div>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Enfrentamientos directos</h2>
+  {% if p.h2h.count %}
+  <div class="h2h-summary">
+    <div><b>{{ p.h2h.home_wins }}</b><span>victorias de {{ p.home.name }}</span></div>
+    <div><b>{{ p.h2h.draws }}</b><span>empates</span></div>
+    <div><b>{{ p.h2h.away_wins }}</b><span>victorias de {{ p.away.name }}</span></div>
+    <div><b>{{ p.h2h.avg_goals | num(2) }}</b><span>goles por partido</span></div>
+    {% if p.h2h.avg_corners is not none %}
+    <div><b>{{ p.h2h.avg_corners | num(1) }}</b><span>córners por partido</span></div>
+    {% endif %}
+    {% if p.h2h.avg_cards is not none %}
+    <div><b>{{ p.h2h.avg_cards | num(1) }}</b><span>tarjetas por partido</span></div>
+    {% endif %}
+  </div>
+  <div class="table-wrap">
+  <table class="h2h">
+    <thead><tr><th>Fecha</th><th>Local</th><th>Resultado</th><th>Visitante</th><th>Córners</th><th>Tarjetas</th></tr></thead>
+    <tbody>
+      {% for m in p.h2h.matches %}
+      <tr>
+        <td>{{ m.date | date_time }}</td>
+        <td>{{ m.home }}</td>
+        <td class="h2h-score">{{ m.score }}</td>
+        <td>{{ m.away }}</td>
+        <td>{{ m.corners if m.corners is not none else '—' }}</td>
+        <td>{{ m.cards if m.cards is not none else '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p class="note">No hay enfrentamientos directos en el histórico disponible.</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Cómo se ha calculado</h2>
+  <div class="grid-2">
+    <dl class="stat-grid wide">
+      <div><dt>Fuerza ofensiva {{ p.home.code }}</dt><dd>{{ p.strength.home.attack | num(2) }}×</dd></div>
+      <div><dt>Solidez defensiva {{ p.home.code }}</dt><dd>{{ p.strength.home.defence | num(2) }}×</dd></div>
+      <div><dt>Fuerza ofensiva {{ p.away.code }}</dt><dd>{{ p.strength.away.attack | num(2) }}×</dd></div>
+      <div><dt>Solidez defensiva {{ p.away.code }}</dt><dd>{{ p.strength.away.defence | num(2) }}×</dd></div>
+      <div><dt>Confianza</dt><dd>{{ p.confidence.label }}</dd></div>
+      <div><dt>Partidos de entrenamiento</dt><dd>{{ model_matches }}</dd></div>
+    </dl>
+    <p class="explain">
+      El resultado sale de un modelo <strong>Dixon-Coles</strong>: estima el
+      ataque y la defensa de cada equipo, añade la ventaja de jugar en casa y
+      corrige la frecuencia de los marcadores bajos. Los partidos recientes
+      pesan más que los antiguos. Córners, tarjetas y tiros usan un modelo
+      aparte que combina lo que genera cada equipo con lo que concede su rival,
+      y las probabilidades de cada línea se calculan con una distribución
+      binomial negativa para reflejar su mayor variabilidad.
+      Un valor de <em>1.00×</em> significa "igual que la media de la liga".
+    </p>
+  </div>
+</section>
+{% endblock %}
