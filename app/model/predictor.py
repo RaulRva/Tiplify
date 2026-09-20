@@ -226,10 +226,12 @@ class Engine:
                 "home": self._standing_row(home),
                 "away": self._standing_row(away),
             }
+            prediction["poster"] = self._poster(prediction, totals)
         else:
             prediction["form"] = {"home": self._mini_form(home), "away": self._mini_form(away)}
             prediction["h2h"] = {"count": 0, "matches": []}
             prediction["standings"] = {"home": None, "away": None}
+            prediction["poster"] = None
 
         prediction["picks"] = self._picks(prediction)
         prediction["tiers"] = self._tiered_bets(prediction, matrix)
@@ -266,6 +268,163 @@ class Engine:
             "losses": int(record["perdidos"]),
             "goals_for": int(record["gf"]),
             "goals_against": int(record["gc"]),
+        }
+
+    def _poster(self, prediction: dict, totals: np.ndarray) -> dict:
+        """Bloque visual de cierre: resume el partido al estilo de una infografía."""
+        over15 = next(row["over"] for row in prediction["goal_lines"] if row["line"] == 1.5)
+        over25 = float(prediction["over25"])
+        under25 = 1.0 - over25
+        take_over = over25 >= 0.5
+        direction_prob = over25 if take_over else under25
+        house_price = pricing.house_odds(
+            direction_prob, (over25, under25), config.MARGIN_BINARY
+        )
+        market_goals = (prediction.get("market") or {}).get("goals") or {}
+        listed = market_goals.get("odds_over") if take_over else market_goals.get("odds_under")
+
+        low = float(totals[0] + totals[1]) if len(totals) > 1 else 0.0
+        two = float(totals[2]) if len(totals) > 2 else 0.0
+        high = max(0.0, 1.0 - low - two)
+
+        sample = float((prediction.get("confidence") or {}).get("sample") or 0.0)
+        top = float((prediction.get("confidence") or {}).get("score") or 0.0)
+        context = int(
+            np.clip(50 + (top - 0.33) * 85 + min(sample, 40) * 0.35, 1, 99)
+        )
+        evidence = int(np.clip(round(100 * (1 - math.exp(-sample / 25.0))), 1, 99))
+
+        scores = prediction.get("scorelines") or []
+        likely = scores[0] if scores else None
+        likely_tag = ""
+        if likely:
+            if likely["prob"] >= 0.15:
+                likely_tag = "alta"
+            elif likely["prob"] >= 0.11:
+                likely_tag = "media"
+            else:
+                likely_tag = "baja"
+
+        def form_side(form: dict) -> dict:
+            points = int(form.get("wins") or 0) * 3 + int(form.get("draws") or 0)
+            return {
+                "streak": list(form.get("streak") or []),
+                "wins": int(form.get("wins") or 0),
+                "draws": int(form.get("draws") or 0),
+                "losses": int(form.get("losses") or 0),
+                "points": points,
+                "goals_for_total": form.get("goals_for_total"),
+                "goals_against_total": form.get("goals_against_total"),
+                "goals_for": form.get("goals_for"),
+                "goals_against": form.get("goals_against"),
+                "over25": form.get("over25_rate"),
+                "btts": form.get("btts_rate"),
+                "clean_sheets": int(form.get("clean_sheets") or 0),
+                "shots": form.get("shots_for"),
+                "shots_target": form.get("shots_target_for"),
+                "corners": form.get("corners_for"),
+                "cards": form.get("cards_for"),
+                "matches": int(form.get("matches") or 0),
+            }
+
+        home_form = form_side(prediction["form"]["home"])
+        away_form = form_side(prediction["form"]["away"])
+        if home_form["points"] > away_form["points"]:
+            form_edge = prediction["home"]["name"]
+        elif away_form["points"] > home_form["points"]:
+            form_edge = prediction["away"]["name"]
+        else:
+            form_edge = "Igualados"
+
+        home_diff = (home_form["goals_for"] or 0) - (home_form["goals_against"] or 0)
+        away_diff = (away_form["goals_for"] or 0) - (away_form["goals_against"] or 0)
+        if home_diff > away_diff:
+            stat_edge = prediction["home"]["name"]
+        elif away_diff > home_diff:
+            stat_edge = prediction["away"]["name"]
+        else:
+            stat_edge = "Igualados"
+
+        def metric_block(name: str, unit: str, low_line: float, high_line: float) -> dict | None:
+            block = prediction.get(name)
+            if not block:
+                return None
+            main = config.MAIN_LINES[name]
+            row = next((item for item in block["lines"] if item["line"] == main), None)
+            if row is None:
+                return None
+            over = float(row["over"])
+            under = float(row["under"])
+            take_over = over >= 0.5
+            prob = over if take_over else under
+            low_row = next((item for item in block["lines"] if item["line"] == low_line), None)
+            high_row = next((item for item in block["lines"] if item["line"] == high_line), None)
+            buckets = None
+            if low_row and high_row:
+                low = float(low_row["under"])
+                high = float(high_row["over"])
+                buckets = {
+                    "low": low,
+                    "mid": max(0.0, 1.0 - low - high),
+                    "high": high,
+                    "low_label": f"≤{int(low_line)}",
+                    "mid_label": f"{int(low_line) + 1}–{int(high_line)}",
+                    "high_label": f"{int(high_line) + 1}+",
+                }
+            return {
+                "home": float(block["home"]),
+                "away": float(block["away"]),
+                "total": float(block["total"]),
+                "league_average": block.get("league_average"),
+                "line": main,
+                "over": over,
+                "under": under,
+                "side": "over" if take_over else "under",
+                "label": f"{'Más' if take_over else 'Menos'} de {main:g} {unit}",
+                "prob": prob,
+                "house_odds": pricing.house_odds(prob, (over, under), config.MARGIN_BINARY),
+                "buckets": buckets,
+            }
+
+        h2h = prediction.get("h2h") or {}
+        return {
+            "direction": {
+                "label": "Más de 2.5 goles" if take_over else "Menos de 2.5 goles",
+                "side": "over" if take_over else "under",
+                "prob": direction_prob,
+                "house_odds": house_price,
+                "listed_odds": None if listed is None or (isinstance(listed, float) and np.isnan(listed)) else float(listed),
+            },
+            "over15": float(over15),
+            "over25": over25,
+            "btts": float(prediction["btts"]),
+            "evidence": evidence,
+            "context": context,
+            "goals": {
+                "low": low,
+                "two": two,
+                "high": high,
+            },
+            "likely": likely,
+            "likely_tag": likely_tag,
+            "next_scores": scores[1:3],
+            "corners": metric_block("corners", "córners", 8.5, 10.5),
+            "cards": metric_block("cards", "tarjetas", 3.5, 5.5),
+            "form_home": home_form,
+            "form_away": away_form,
+            "form_edge": form_edge,
+            "stat_edge": stat_edge,
+            "h2h": {
+                "count": int(h2h.get("count") or 0),
+                "home_wins": int(h2h.get("home_wins") or 0),
+                "draws": int(h2h.get("draws") or 0),
+                "away_wins": int(h2h.get("away_wins") or 0),
+                "avg_goals": h2h.get("avg_goals"),
+                "avg_corners": h2h.get("avg_corners"),
+                "avg_cards": h2h.get("avg_cards"),
+                "over25": h2h.get("over25_rate"),
+                "btts": h2h.get("btts_rate"),
+            },
         }
 
     def _market(self, fixture: pd.Series, outcome: dict, goal_lines: list[dict]) -> dict:

@@ -34,6 +34,42 @@
 </div>
 {% endmacro %}
 
+{% macro poster_metric(block, title, unit, area) %}
+<article class="poster-card poster-metric poster-{{ area }}">
+  <h3>{{ title }}</h3>
+  <div class="poster-score-top">
+    <div>
+      <span>Esperado</span>
+      <b>{{ block.home | num(1) }} · {{ block.away | num(1) }}</b>
+      <small>{{ p.home.code }} / {{ p.away.code }}</small>
+    </div>
+    <div>
+      <span>Total estimado</span>
+      <b>{{ block.total | num(1) }}</b>
+      <small>{{ unit }}{% if block.league_average is not none %} · liga {{ block.league_average | num(1) }}{% endif %}</small>
+    </div>
+    <div>
+      <span>Ruta {{ unit }}</span>
+      <b>{{ block.label }}</b>
+      <small>{{ block.prob | pct }} · cuota {{ block.house_odds | num(2) }}</small>
+    </div>
+    <div>
+      <span>Más de {{ block.line }}</span>
+      <b>{{ block.over | pct }}</b>
+      <small>menos {{ block.under | pct }}</small>
+    </div>
+  </div>
+  {% if block.buckets %}
+  <div class="poster-dist">
+    <span>Distribución de {{ unit }}</span>
+    <div class="poster-dist-row"><i style="width: {{ (block.buckets.low * 100) | round(1) }}%"></i><b>{{ block.buckets.low_label }}</b><em>{{ block.buckets.low | pct }}</em></div>
+    <div class="poster-dist-row two"><i style="width: {{ (block.buckets.mid * 100) | round(1) }}%"></i><b>{{ block.buckets.mid_label }}</b><em>{{ block.buckets.mid | pct }}</em></div>
+    <div class="poster-dist-row high"><i style="width: {{ (block.buckets.high * 100) | round(1) }}%"></i><b>{{ block.buckets.high_label }}</b><em>{{ block.buckets.high | pct }}</em></div>
+  </div>
+  {% endif %}
+</article>
+{% endmacro %}
+
 {% macro form_card(team, form, title) %}
 <div class="form-card">
   <h4>
@@ -425,6 +461,250 @@
   <p class="note">No hay enfrentamientos directos en el histórico disponible.</p>
   {% endif %}
 </section>
+
+{% if p.poster %}
+{% set poster = p.poster %}
+{% set fh = poster.form_home %}
+{% set fa = poster.form_away %}
+<section class="poster" aria-label="Resumen visual del partido">
+  <header class="poster-banner">
+    <div class="poster-kicker">
+      <span>Datos reales. Contexto real.</span>
+      <strong>TIPLIFY</strong>
+      <span>Mejor lectura, partido más claro.</span>
+    </div>
+    <div class="poster-comp">{{ league }} · {{ season }}{% if p.round %} · {{ p.round | matchday }}{% endif %}</div>
+    <div class="poster-vs">
+      <div class="poster-club">
+        <span class="crest xl" style="--crest:{{ p.home.color }}; --crest-text:{{ p.home.accent }}">{{ p.home.code }}</span>
+        <b>{{ p.home.name }}</b>
+        {% if p.standings.home %}<small>{{ p.standings.home.pos }}º · {{ p.standings.home.points }} pts</small>{% endif %}
+      </div>
+      <div class="poster-mid">
+        <em>VS</em>
+        <span>{{ p.date | long_date }}</span>
+        <span>{{ p.time | kickoff }}</span>
+      </div>
+      <div class="poster-club">
+        <span class="crest xl" style="--crest:{{ p.away.color }}; --crest-text:{{ p.away.accent }}">{{ p.away.code }}</span>
+        <b>{{ p.away.name }}</b>
+        {% if p.standings.away %}<small>{{ p.standings.away.pos }}º · {{ p.standings.away.points }} pts</small>{% endif %}
+      </div>
+    </div>
+  </header>
+
+  <div class="poster-grid">
+    <article class="poster-card poster-direction">
+      <h3>Dirección de investigación</h3>
+      <p class="poster-route">Ruta principal del modelo</p>
+      <div class="poster-call">
+        <div>
+          <strong>{{ poster.direction.label }}</strong>
+          <span>La primera lectura que publica el modelo para este partido.</span>
+        </div>
+        <div class="poster-call-prob">
+          <b>{{ poster.direction.prob | pct }}</b>
+          <small>probabilidad del modelo</small>
+          <em>{{ poster.direction.label }}</em>
+        </div>
+      </div>
+      <div class="poster-metrics">
+        <div>
+          <span>Precio estimado</span>
+          <b>{{ (poster.direction.listed_odds or poster.direction.house_odds) | num(2) }}</b>
+        </div>
+        <div>
+          <span>Evidencia</span>
+          <b>{{ poster.evidence }}/100</b>
+        </div>
+        <div>
+          <span>Modelo +2.5</span>
+          <b>{{ poster.over25 | pct }}</b>
+        </div>
+        <div>
+          <span>Contexto</span>
+          <b>{{ poster.context }}</b>
+        </div>
+      </div>
+    </article>
+
+    <article class="poster-card poster-1x2">
+      <h3>Modelo 1X2</h3>
+      <div class="poster-1x2-nums">
+        <div>
+          <b>{{ p.outcome.home | pct }}</b>
+          <span>{{ p.home.code }}</span>
+        </div>
+        <div>
+          <b>{{ p.outcome.draw | pct }}</b>
+          <span>Empate</span>
+        </div>
+        <div>
+          <b>{{ p.outcome.away | pct }}</b>
+          <span>{{ p.away.code }}</span>
+        </div>
+      </div>
+      <div class="probbar poster-bar" role="img"
+           aria-label="Local {{ p.outcome.home | pct }}, empate {{ p.outcome.draw | pct }}, visitante {{ p.outcome.away | pct }}">
+        <span class="seg seg-home" style="width: {{ (p.outcome.home * 100) | round(1) }}%"></span>
+        <span class="seg seg-draw" style="width: {{ (p.outcome.draw * 100) | round(1) }}%"></span>
+        <span class="seg seg-away" style="width: {{ (p.outcome.away * 100) | round(1) }}%"></span>
+      </div>
+      <div class="poster-bar-legend">
+        <span>{{ p.home.name }} {{ p.outcome.home | pct }}</span>
+        <span>Empate {{ p.outcome.draw | pct }}</span>
+        <span>{{ p.away.name }} {{ p.outcome.away | pct }}</span>
+      </div>
+    </article>
+
+    <article class="poster-card poster-outlook">
+      <h3>Lectura de mercados</h3>
+      <div class="poster-outlook-grid">
+        <div>
+          <span>Más de 2.5</span>
+          <b>{{ poster.over25 | pct }}</b>
+          <small>goles</small>
+        </div>
+        <div>
+          <span>Ambos marcan</span>
+          <b>{{ poster.btts | pct }}</b>
+          <small>modelo</small>
+        </div>
+        <div class="accent">
+          <span>Más de 1.5</span>
+          <b>{{ poster.over15 | pct }}</b>
+          <small>goles</small>
+        </div>
+        {% if poster.corners %}
+        <div>
+          <span>Más de {{ poster.corners.line }}</span>
+          <b>{{ poster.corners.over | pct }}</b>
+          <small>córners</small>
+        </div>
+        {% endif %}
+        {% if poster.cards %}
+        <div>
+          <span>Más de {{ poster.cards.line }}</span>
+          <b>{{ poster.cards.over | pct }}</b>
+          <small>tarjetas</small>
+        </div>
+        {% endif %}
+      </div>
+    </article>
+
+    <article class="poster-card poster-score">
+      <h3>Marcador esperado</h3>
+      <div class="poster-score-top">
+        {% if poster.likely %}
+        <div>
+          <span>Más probable</span>
+          <b>{{ poster.likely.home }}–{{ poster.likely.away }}</b>
+          <small>{{ poster.likely.prob | pct(1) }}{% if poster.likely_tag %} · {{ poster.likely_tag }}{% endif %}</small>
+        </div>
+        {% endif %}
+        <div>
+          <span>Goles esperados</span>
+          <b>{{ p.goals.home | num(1) }} · {{ p.goals.away | num(1) }}</b>
+          <small>{{ p.home.code }} / {{ p.away.code }}</small>
+        </div>
+        <div>
+          <span>Total esperado</span>
+          <b>{{ p.goals.total | num(1) }}</b>
+          <small>goles</small>
+        </div>
+        <div>
+          <span>Siguientes</span>
+          {% for s in poster.next_scores %}
+          <small>{{ s.home }}–{{ s.away }} {{ s.prob | pct(1) }}</small>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="poster-dist">
+        <span>Distribución de goles</span>
+        <div class="poster-dist-row"><i style="width: {{ (poster.goals.low * 100) | round(1) }}%"></i><b>0–1</b><em>{{ poster.goals.low | pct }}</em></div>
+        <div class="poster-dist-row two"><i style="width: {{ (poster.goals.two * 100) | round(1) }}%"></i><b>2</b><em>{{ poster.goals.two | pct }}</em></div>
+        <div class="poster-dist-row high"><i style="width: {{ (poster.goals.high * 100) | round(1) }}%"></i><b>3+</b><em>{{ poster.goals.high | pct }}</em></div>
+      </div>
+    </article>
+
+    {% if poster.corners %}{{ poster_metric(poster.corners, 'Córners estimados', 'córners', 'corners') }}{% endif %}
+    {% if poster.cards %}{{ poster_metric(poster.cards, 'Tarjetas estimadas', 'tarjetas', 'cards') }}{% endif %}
+
+    <article class="poster-card poster-form">
+      <h3>Choque de forma reciente</h3>
+      <div class="poster-form-cols">
+        <div>
+          <strong>{{ p.home.code }}</strong>
+          <div class="poster-streak">
+            {% for r in fh.streak %}<i class="r r-{{ r }}">{{ r }}</i>{% endfor %}
+          </div>
+          <b>{{ fh.wins }}-{{ fh.draws }}-{{ fh.losses }}</b>
+          <small>V-E-D</small>
+        </div>
+        <div>
+          <strong>{{ p.away.code }}</strong>
+          <div class="poster-streak">
+            {% for r in fa.streak %}<i class="r r-{{ r }}">{{ r }}</i>{% endfor %}
+          </div>
+          <b>{{ fa.wins }}-{{ fa.draws }}-{{ fa.losses }}</b>
+          <small>V-E-D</small>
+        </div>
+      </div>
+      <div class="poster-form-stats">
+        <div><span>Goles a favor</span><b>{{ fh.goals_for_total if fh.goals_for_total is not none else '—' }}</b><b>{{ fa.goals_for_total if fa.goals_for_total is not none else '—' }}</b></div>
+        <div><span>Goles en contra</span><b>{{ fh.goals_against_total if fh.goals_against_total is not none else '—' }}</b><b>{{ fa.goals_against_total if fa.goals_against_total is not none else '—' }}</b></div>
+        <div><span>Más de 2.5</span><b>{{ fh.over25 | pct }}</b><b>{{ fa.over25 | pct }}</b></div>
+        <div><span>Ambos marcan</span><b>{{ fh.btts | pct }}</b><b>{{ fa.btts | pct }}</b></div>
+        <div><span>Córners / partido</span><b>{{ fh.corners | num(1) }}</b><b>{{ fa.corners | num(1) }}</b></div>
+        <div><span>Tarjetas / partido</span><b>{{ fh.cards | num(1) }}</b><b>{{ fa.cards | num(1) }}</b></div>
+      </div>
+      <p class="poster-edge">Ventaja de forma: <strong>{{ poster.form_edge }}</strong></p>
+    </article>
+
+    <div class="poster-side">
+      <article class="poster-card poster-h2h">
+        <h3>Historial directo</h3>
+        {% if poster.h2h.count %}
+        <div class="poster-h2h-nums">
+          <div><b>{{ poster.h2h.home_wins }}</b><span>{{ p.home.code }}</span></div>
+          <div><b>{{ poster.h2h.draws }}</b><span>Empates</span></div>
+          <div><b>{{ poster.h2h.away_wins }}</b><span>{{ p.away.code }}</span></div>
+        </div>
+        <p>{{ poster.h2h.count }} partidos · {{ poster.h2h.avg_goals | num(1) }} goles/p.{% if poster.h2h.avg_corners is not none %} · {{ poster.h2h.avg_corners | num(1) }} córners/p.{% endif %}{% if poster.h2h.avg_cards is not none %} · {{ poster.h2h.avg_cards | num(1) }} tarj./p.{% endif %} · +2.5 {{ poster.h2h.over25 | pct }} · BTTS {{ poster.h2h.btts | pct }}</p>
+        {% else %}
+        <p class="poster-empty">No hay muestra de enfrentamientos directos en el histórico disponible para este partido.</p>
+        {% endif %}
+      </article>
+
+      <article class="poster-card poster-stats">
+        <h3>Medias recientes</h3>
+        <table class="poster-table">
+          <thead>
+            <tr><th>{{ p.home.code }}</th><th>Dato</th><th>{{ p.away.code }}</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>{{ fh.goals_for | num(1) }}</td><td>Goles / partido</td><td>{{ fa.goals_for | num(1) }}</td></tr>
+            <tr><td>{{ fh.goals_against | num(1) }}</td><td>Encaja / partido</td><td>{{ fa.goals_against | num(1) }}</td></tr>
+            <tr><td>{{ fh.clean_sheets }}</td><td>Porterías a cero</td><td>{{ fa.clean_sheets }}</td></tr>
+            <tr><td>{{ fh.shots | num(1) }}</td><td>Tiros / partido</td><td>{{ fa.shots | num(1) }}</td></tr>
+            <tr><td>{{ fh.shots_target | num(1) }}</td><td>A puerta / partido</td><td>{{ fa.shots_target | num(1) }}</td></tr>
+            <tr><td>{{ fh.corners | num(1) }}</td><td>Córners / partido</td><td>{{ fa.corners | num(1) }}</td></tr>
+            <tr><td>{{ fh.cards | num(1) }}</td><td>Tarjetas / partido</td><td>{{ fa.cards | num(1) }}</td></tr>
+          </tbody>
+        </table>
+        <p class="poster-edge">Ventaja estadística: <strong>{{ poster.stat_edge }}</strong></p>
+      </article>
+    </div>
+  </div>
+
+  <footer class="poster-foot">
+    <span>{{ p.date | long_date }} · {{ p.time | kickoff }}</span>
+    <span>{{ league }}{% if p.round %} · {{ p.round | matchday }}{% endif %}</span>
+    <span>{{ season }} · {{ country }}</span>
+    <span>tiplify.vercel.app</span>
+  </footer>
+</section>
+{% endif %}
 
 <section class="panel">
   <h2>Cómo se ha calculado</h2>

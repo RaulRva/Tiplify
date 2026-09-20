@@ -59,6 +59,11 @@ def _safe_mean(series: pd.Series) -> float | None:
     return float(values.mean()) if len(values) else None
 
 
+def _safe_sum(series: pd.Series) -> int | None:
+    values = pd.to_numeric(series, errors="coerce").dropna()
+    return int(values.sum()) if len(values) else None
+
+
 def recent_form(
     view: pd.DataFrame,
     team: str,
@@ -83,6 +88,8 @@ def recent_form(
             "points_per_game": None,
             "goals_for": None,
             "goals_against": None,
+            "goals_for_total": None,
+            "goals_against_total": None,
             "xg_for": None,
             "xg_against": None,
             "shots_for": None,
@@ -121,6 +128,8 @@ def recent_form(
         "points_per_game": _safe_mean(subset["points"]),
         "goals_for": _safe_mean(subset["goals_for"]),
         "goals_against": _safe_mean(subset["goals_against"]),
+        "goals_for_total": _safe_sum(subset["goals_for"]),
+        "goals_against_total": _safe_sum(subset["goals_against"]),
         "xg_for": _safe_mean(subset["xg_for"]),
         "xg_against": _safe_mean(subset["xg_against"]),
         "shots_for": _safe_mean(subset["shots_for"]),
